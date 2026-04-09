@@ -1,0 +1,82 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import './providers/auth_provider.dart';
+import './providers/product_provider.dart';
+import './providers/cart_provider.dart';
+import './screens/splash_screen.dart';
+import './screens/auth_screen.dart';
+import './screens/home_screen.dart';
+
+void main() {
+  runApp(const AgriFlowApp());
+}
+
+class AgriFlowApp extends StatelessWidget {
+  const AgriFlowApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ProductProvider()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+      ],
+      child: Consumer<AuthProvider>(
+        builder: (ctx, auth, _) => MaterialApp(
+          title: 'AgriFlow',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF10B981), // Emerald-600
+              primary: const Color(0xFF10B981),
+              secondary: const Color(0xFF065F46),
+              surface: const Color(0xFFF8FAFC),
+            ),
+            textTheme: GoogleFonts.interTextTheme(),
+            appBarTheme: AppBarTheme(
+              backgroundColor: const Color(0xFFF8FAFC),
+              elevation: 0,
+              centerTitle: false,
+              titleTextStyle: GoogleFonts.inter(
+                color: const Color(0xFF0F172A),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+            ),
+            cardTheme: CardTheme(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Color(0xFFF1F5F9)),
+              ),
+              color: Colors.white,
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          home: auth.isAuthenticated 
+              ? const HomeScreen() 
+              : FutureBuilder(
+                  future: Future.delayed(const Duration(seconds: 0)), // Small shim for async init
+                  builder: (ctx, snapshot) => const SplashScreen(),
+                ),
+          routes: {
+            '/auth': (ctx) => const AuthScreen(),
+            '/home': (ctx) => const HomeScreen(),
+          },
+        ),
+      ),
+    );
+  }
+}
