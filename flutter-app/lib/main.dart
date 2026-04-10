@@ -47,7 +47,7 @@ class AgriFlowApp extends StatelessWidget {
               ),
               iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
             ),
-            cardTheme: CardTheme(
+            cardTheme: CardThemeData(
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),

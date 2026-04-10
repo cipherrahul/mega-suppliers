@@ -45,7 +45,7 @@ class CartScreen extends StatelessWidget {
                               Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
                               IconButton(
                                 icon: const Icon(Icons.add_circle_outline, color: Color(0xFF10B981)),
-                                onPressed: () => cart.addItem(item.product.id as any), // Fix: cart.addItem takes Product
+                                onPressed: () => cart.addItem(item.product),
                                 // Wait, I'll fix the cart provider or call it correctly.
                                 // Actually, I'll use the item.product.
                               ),
@@ -65,7 +65,7 @@ class CartScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.between,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Total Amount', style: TextStyle(fontSize: 18, color: Color(0xFF64748B))),
                           Text(currencyFormat.format(cart.totalAmount), 

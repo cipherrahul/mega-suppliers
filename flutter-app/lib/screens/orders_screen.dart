@@ -58,7 +58,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.between,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text('Order #${order.id.substring(0, 8)}', 
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -73,7 +73,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             )),
                             const Divider(height: 24),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.between,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(dateFormat.format(order.createdAt), 
                                   style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),

@@ -184,7 +184,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ...cart.items.values.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.between,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('${item.quantity}x ${item.product.name}', style: const TextStyle(color: Color(0xFF64748B))),
                   Text(currencyFormat.format(item.product.price * item.quantity), style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -193,7 +193,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             )),
             const Divider(height: 48),
             Row(
-              mainAxisAlignment: MainAxisAlignment.between,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Total Payable', style: TextStyle(fontSize: 18, color: Color(0xFF64748B))),
                 Text(currencyFormat.format(cart.totalAmount), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),

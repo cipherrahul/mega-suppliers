@@ -3,39 +3,52 @@ import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
 import prisma from '../utils/prisma';
 
+// ─── Valid status transitions ─────────────────────────────────────────────────
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  PENDING:   ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['DELIVERED', 'CANCELLED'],
+  DELIVERED: [],  // Terminal state
+  CANCELLED: [],  // Terminal state
+};
+
+// ─── Create Order ─────────────────────────────────────────────────────────────
 export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
     const { items, address } = req.body;
     const userId = req.user?.id;
 
-    if (!items || !items.length || !address) {
-      return res.status(400).json({ error: 'Items and address are required' });
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items array is required and must not be empty' });
     }
 
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    if (!address || (typeof address === 'string' && address.trim().length < 10)) {
+      return res.status(400).json({ error: 'A valid delivery address (min 10 characters) is required' });
     }
 
-    // Use a transaction to ensure atomic order creation
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       let totalOrderPrice = 0;
       const orderItemsData = [];
 
       for (const item of items) {
+        if (!item.productId || !item.quantity || item.quantity < 1) {
+          throw new Error('Each item must have a valid productId and quantity ≥ 1');
+        }
+
         const product = await tx.product.findUnique({
           where: { id: item.productId },
         });
 
-        if (!product) {
-          throw new Error(`Product with ID ${item.productId} not found`);
+        if (!product || !product.isActive) {
+          throw new Error(`Product not found or unavailable`);
         }
 
         if (product.stockQuantity < item.quantity) {
-          throw new Error(`Insufficient stock for product: ${product.name}`);
+          throw new Error(`Insufficient stock for "${product.name}". Available: ${product.stockQuantity}`);
         }
 
-        const itemTotalPrice = product.price * item.quantity;
-        totalOrderPrice += itemTotalPrice;
+        totalOrderPrice += product.price * item.quantity;
 
         orderItemsData.push({
           productId: product.id,
@@ -43,10 +56,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
           priceAtPurchase: product.price,
         });
 
-        // Update stock
         await tx.product.update({
           where: { id: product.id },
-          data: { stockQuantity: product.stockQuantity - item.quantity },
+          data: { stockQuantity: { decrement: item.quantity } },
         });
       }
 
@@ -54,14 +66,12 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
         data: {
           userId,
           totalPrice: totalOrderPrice,
-          address,
+          address: address.trim(),
           status: 'PENDING',
-          items: {
-            create: orderItemsData,
-          },
+          items: { create: orderItemsData },
         },
         include: {
-          items: true,
+          items: { include: { product: { select: { id: true, name: true, imageUrl: true } } } },
         },
       });
 
@@ -74,6 +84,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// ─── Get My Orders ────────────────────────────────────────────────────────────
 export const getMyOrders = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -83,7 +94,9 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
       where: { userId },
       include: {
         items: {
-          include: { product: true },
+          include: {
+            product: { select: { id: true, name: true, imageUrl: true, price: true } },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -91,45 +104,85 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
 
     res.json(orders);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch orders' });
   }
 };
 
+// ─── Get All Orders (Admin) ───────────────────────────────────────────────────
 export const getAllOrders = async (req: AuthRequest, res: Response) => {
   try {
-    const orders = await prisma.order.findMany({
-      include: {
-        user: { select: { name: true, phone: true } },
-        items: {
-          include: { product: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { status, page = '1', limit = '20' } = req.query;
+    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
-    res.json(orders);
+    const where = status && status !== 'ALL' ? { status: status as any } : {};
+
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        skip,
+        take: parseInt(limit as string),
+        include: {
+          user: { select: { id: true, name: true, phone: true } },
+          items: {
+            include: {
+              product: { select: { id: true, name: true, imageUrl: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.order.count({ where }),
+    ]);
+
+    res.json({ orders, total, page: parseInt(page as string), limit: parseInt(limit as string) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to fetch orders' });
   }
 };
 
+// ─── Update Order Status (Admin) ─────────────────────────────────────────────
 export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const { status } = req.body;
 
-    const validStatuses = ['PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
-    }
-
-    const order = await prisma.order.update({
+    const order = await prisma.order.findUnique({
       where: { id },
-      data: { status },
+      include: { items: true },
     });
 
-    res.json(order);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const allowedNext = VALID_TRANSITIONS[order.status];
+    if (!allowedNext.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot transition order from ${order.status} to ${status}`,
+        allowedTransitions: allowedNext,
+      });
+    }
+
+    // Restore stock if cancelling
+    if (status === 'CANCELLED') {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        for (const item of order.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stockQuantity: { increment: item.quantity } },
+          });
+        }
+        await tx.order.update({ where: { id }, data: { status: 'CANCELLED' } });
+      });
+    } else {
+      await prisma.order.update({ where: { id }, data: { status } });
+    }
+
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id },
+      include: { user: { select: { name: true, phone: true } }, items: true },
+    });
+
+    res.json(updatedOrder);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to update order status' });
   }
 };
